@@ -40,7 +40,7 @@ int validateString(string &expr) {
          if (i > 0 && (isdigit(expr[i - 1]) || expr[i - 1] == ')')) {
             expr.insert(i++, "*");
          }
-         else if (i + 1 < expr.length() && isdigit(expr[i + 1])) {
+         else if (i + 1 < expr.length() && (isdigit(expr[i + 1]) || expr[i + 1] == '.')) {
             return 4; // syntax error near 'M' character
          }
          expr.erase(i, 1);
@@ -96,9 +96,7 @@ int validateString(string &expr) {
          return 1; // syntax error: contains invalid character
       }
    }
-   if (expr[0] == '+') {
-      expr.erase(0, 1);
-   }
+
    if (balance) {
       return 0; // parentheses error
    }
@@ -112,15 +110,22 @@ string infixToPostfix(const string &expr) {
    bool isNum = false;
 
    for (int i = 0; i < expr.length(); i++) {
-      bool unary = (expr[i] == '-') && 
-         (i == 0 || !isdigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!');
+      if (expr[i] == '-' || expr[i] == '+') {
+         bool unary = false;
+         if (i == 0) {
+            unary = true;
+         }
+         else if (!isdigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!') {
+            unary = true;
+         }
 
-      if (unary) {
-         postfix += "-";
-         i++;
+         if (unary) {
+            if (expr[i] == '-')
+               postfix += '-';
+            i++;
+         }
       }
-
-      if (expr[i] == '.') {
+      else if (expr[i] == '.') {
          postfix += ".";
          i++;
       }
@@ -162,7 +167,6 @@ string infixToPostfix(const string &expr) {
       postfix += s.top();
       s.pop();
    }
-
    return postfix;
 }
 
@@ -203,6 +207,12 @@ double postfixExp(string& str, int& invalid) {
          s.push(val);
       } 
       else {
+         // invalid
+         if (s.empty()) {
+            invalid = 1;
+            return -1;
+         }
+
          double val1 = s.top();
          s.pop();
 

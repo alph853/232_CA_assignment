@@ -3,6 +3,8 @@
    ### string 
    input: .space 101
    validatedString: .space 200
+   postfixExpression: .space 200
+
    stringLength: .word 0
    resultString: .space 100
    star: .asciiz "*"
@@ -11,24 +13,26 @@
    f_to_s_result: .space 100
    str1: .space 100
    str2: .space 100
+   stack: .space 400
    ### string
 
    prompt: .asciiz "\n>> "
    quitCommand: .asciiz "quit"
    quitPrompt: .asciiz "EXIT!"
    fact: .float 0:35
+   constUpperFactorial: .float 36.0
    const0: .float 0.0
    const1: .float 1.0
    const10: .float 10.0
    constFloat: .float 145234.5432
    preAns: .float 0.0
-   to_string_preAns: .space 100
+   to_string_preAns: .space 20
 
    # error messages
    error0: .asciiz "SYNTAX ERROR: INVALID PARENTHESES!\n"
    error1: .asciiz "SYNTAX ERROR: CONTAINING INVALID CHARACTER!\n"
-   error2: .asciiz "SYNTAX ERROR: INVALID '.' CHARACTER!\n"
-   error3: .asciiz "SYNTAX ERROR: INVALID '!' OPERATOR!\n"
+   error2: .asciiz "SYNTAX ERROR NEAR '.' CHARACTER!\n"
+   error3: .asciiz "SYNTAX ERROR NEAR '!' OPERATOR!\n"
    error4: .asciiz "SYNTAX ERROR NEAR 'M' CHARACTER!\n"
    error1_1: .asciiz "SYNTAX ERROR: INVALID OPERATION!\n"
    error1_2: .asciiz "MATH ERROR: FACTORIAL OF NON-POSITIVE NUMBER!\n"
@@ -55,6 +59,17 @@
 #       addi $t2, $t2, 4
 #       beq $t1, 35, main
 #       j factorial_loop
+# test:
+#    la $a0, inPrompt
+#    la $a1, quitCommand
+#    jal strAppend
+
+#    la $a0, inPrompt
+#    li $v0, 4
+#    syscall
+
+#    j exit
+
 
 main:
    li $v0, 4
@@ -112,6 +127,21 @@ main:
       convertToPostfix:
       la $a0, validatedString
       li $v0, 4
+      syscall
+
+      li $v0, 11
+      li $a0, '\n'
+      syscall
+
+      la $a0, validatedString
+      jal infixToPostfix
+
+      move $a0, $v0
+      li $v0, 4
+      syscall
+
+      li $v0, 11
+      li $a0, '\n'
       syscall
 
       j while
@@ -297,41 +327,43 @@ substr:
    # a2 is length of substring
    la $v0, substr_res
    substr_loop:
+      beq $a2, $0, end_substr
       lb $t0, 0($a0)
       sb $t0, 0($v0)
       addi $a2, $a2, -1
-      beq $a2, $0, end_substr
       addi $a0, $a0, 1
       addi $v0, $v0, 1
       j substr_loop
    end_substr:
-      sb $0, 1($v0)
+      sb $0, 0($v0)
       la $v0, substr_res
       jr $ra
 
 erase:
-   # this function assume all inputs are valid
+   # this function can handle erase nothing
    # a0 = string, a1 = start index, a2 = count
    # v0 = start address of erased string
-   move $t1, $a0
+   addi $sp, $sp, -4
+   sw $ra, 0($sp)
 
-   # a0 = address of a0[start]
-   add $a0, $a0, $a1
-   # a1 = address of a0[start+count]
-   add $a1, $a0, $a2
-   erase_loop:
-      lb $t0, 0($a1)
-      sb $t0, 0($a0)
-      beq $a2, $0, end_erase
-      beq $t0, $0, end_erase
-      addi $a1, $a1, 1
-      addi $a0, $a0, 1
-      addi $a2, $a2, -1
-      j erase_loop
-   end_erase:
-      move $v0, $t1
-      jr $ra
+   move $t5, $a0
+   add $t4, $a0, $a1
+   jal strLen
+   move $t3, $v0
 
+   move $a0, $t5
+   add $a1, $a1, $a2
+   addi $a2, $t3, -1    
+   jal substr
+
+   move $a0, $v0
+   move $a1, $t4
+   jal strcpy
+   
+   lw $ra, 0($sp)
+   addi $sp, $sp, 4
+   move $v0, $t5
+   jr $ra
 
 strcpy:
    # a0 = address of string, a1 = address to save the string
@@ -421,6 +453,25 @@ int_to_string:
       move $v0, $sp
       move $sp, $t2
       jr $ra
+
+strAppend:
+   # a0 = string, a1 = string to append to string a0
+   # v0 = start address of returned string
+   addi $sp, $sp, -4
+   sw $ra, 0($sp)
+
+   jal strLen
+   # a0 = address of '\0' now
+   move $t0, $a1
+   move $a1, $a0
+   move $a0, $t0
+
+   jal strcpy
+
+   move $v0, $t0
+   lw $ra, 0($sp)
+   addi $sp, $sp, 4
+   jr $ra
 
 ########################################
 ########################################
@@ -523,7 +574,9 @@ validateString:
             add $t1, $t0, $a0
             lb $a0, 0($t1)
             jal isdigit
-            beq $v0, 0, substitute_ans
+            beq $v0, 1, return4
+            beq $a0, '.', return4
+            j substitute_ans
             return4:
                li $v0, 4
                move $sp, $fp
@@ -565,6 +618,8 @@ validateString:
          lb $a0, 0($a0)
          jal isdigit
          beq $v0, 0, return2
+
+         la $a0, validatedString
          addi $t0, $s0, -1
          add $t1, $a0, $t0
          lb $a0, 0($t1)
@@ -590,6 +645,7 @@ validateString:
          beq $a0, '!', insert_multiplication2
          jal isdigit
          beq $v0, 1, insert_multiplication2
+         j increBalance
          insert_multiplication2:
             la $a0, validatedString
             la $a1, star
@@ -634,9 +690,9 @@ validateString:
       # else if (expr[i] == '-')
          li $s5, 1            # minus = true
          whileSimplify:
-            addi $t0, $s0, 1
             la $a0, validatedString
             jal strLen
+            addi $t0, $s0, 1
             beq $t0, $v0, substitute_minus
             la $a0, validatedString
             add $t1, $t0, $a0
@@ -705,7 +761,8 @@ validateString:
             addi $sp, $sp, 4
             jr $ra
 
-      elseif_check:
+      elseif_check:  
+         move $a0, $s3
          jal validOps
          beq $v0, 1, validated_increment
          jal isdigit
@@ -722,12 +779,10 @@ validateString:
          j validatedString_loop
 
    validatedString_loop_end:
-      la $a0, validatedString
-      lb $t1, 0($a0)
-      bne $t1, '+', return
-      li $a1, 0
-      li $a2, 1
-      jal erase
+      # check balance
+      beq $s4, $0, return
+      j return0
+
    return:
       li $v0, -1
       move $sp, $fp
@@ -737,7 +792,342 @@ validateString:
 
 
 infixToPostfix:
-   jr $ra
+   # a0 = validated infix expression, v0 = postfix expression
+   addi $sp, $sp, -4
+   move $fp, $sp
+   sw $ra, 0($sp)
+
+   li $s0, 0      # int i = 0
+   li $s1, 0      # isNum = false
+   la $s2, postfixExpression      # keep track of the end of postfix
+   la $s3, stack  # stack<char> 
+   sb $0, 0($s3)  # stack empty if top is null
+
+   sb $0, 0($s2)  # postfix = ""
+   jal strLen
+   move $s4, $v0 # expr.length()
+
+
+   infixToPostfix_loop:
+      beq $s0, $s4, infixToPostfix_loop_end
+      la $a0, validatedString
+      add $t0, $a0, $s0
+      lb $s5, 0($t0) # expr[i]
+      
+      beq $s5, '-', check_unary
+      beq $s5, '+', check_unary
+      j elseif_dot1
+      check_unary:
+      # if (expr[i] == '-' || expr[i] == '+')
+         li $t0, 0   # bool unary = false
+         beq $s0, $0, unary_true
+         addi $t1, $s0, -1
+         add $a0, $a0, $t1
+         lb $a0, 0($a0)
+         jal isdigit
+         beq $v0, 1, ifDigit
+         beq $a0, ')', ifDigit
+         beq $a0, '!', ifDigit
+         unary_true:
+            bne $s5, '-', just_increment_s0
+            la $a0, str1
+            sb $s5, 0($a0)
+            move $a1, $s2
+            jal strcpy
+            addi $s2, $s2, 1
+            just_increment_s0:
+            addi $s0, $s0, 1
+         j ifDigit
+      elseif_dot1:
+      bne $s5, '.', ifDigit
+      # if (expr[i] == '.')
+         la $a0, str1
+         sb $s5, 0($a0)
+         move $a1, $s2
+         jal strcpy
+         addi $s2, $s2, 1
+         addi $s0, $s0, 1
+
+      ifDigit:
+      la $a0, validatedString
+      add $a0, $a0, $s0
+      lb $s5, 0($a0)
+      
+      lb $a0, 0($a0)
+      jal isdigit
+      bne $v0, 1, elseif_open1
+      # if (isdigit(expr[i]))
+         la $a0, str1
+         sb $s5, 0($a0)
+         move $a1, $s2
+         jal strcpy
+         li $s1, 1
+         addi $s2, $s2, 1
+         j infixToPostfix_increment
+      
+      elseif_open1:
+      bne $s5, '(', elseif_close1
+      # else if (expr[i] == '(')
+         addi $s3, $s3, 1
+         sb $s5, 0($s3)
+         j infixToPostfix_increment
+
+      elseif_close1:
+      bne $s5, ')', elseif_validOps1
+      # else if (expr[i] == ')')
+         beq $s1, $0, while_notOpen
+            la $a0, str1
+            li $t0, ' '
+            sb $t0, 0($a0)
+            move $a1, $s2
+            jal strcpy
+            addi $s2, $s2, 1
+            li $s1, 0
+         while_notOpen:
+            lb $t0, 0($s3)
+            beq $t0, $0, just_pop
+            beq $t0, '(', just_pop
+            la $a0, str1
+            sb $t0, 0($a0)
+            li $t0, ' ' 
+            sb $t0, 1($a0)
+            move $a1, $s2
+            jal strcpy
+            addi $s2, $s2, 2
+            addi $s3, $s3, -1
+            j while_notOpen
+         just_pop:
+            addi $s3, $s3, -1
+         j infixToPostfix_increment
+
+      elseif_validOps1:
+      move $a0, $s5
+      jal validOps
+      beq $v0, 0, infixToPostfix_increment
+      # else if(validOps(expr[i]))
+         beq $s1, $0, while_precedence
+            la $a0, str1
+            li $t0, ' '
+            sb $t0, 0($a0)
+            move $a1, $s2
+            jal strcpy
+            addi $s2, $s2, 1
+            li $s1, 0
+         while_precedence:
+            lb $t0, 0($s3)
+            beq $t0, $0, just_push
+            move $a0, $t0
+            jal precedence
+            move $t1, $v0     # t1 = precedence(stack.top())
+            move $a0, $s5
+            jal precedence
+            move $t2, $v0     # t2 = precedence(expr[i])
+            blt $t1, $t2, just_push
+               la $a0, str1
+               sb $t0, 0($a0)
+               li $t0, ' '
+               sb $t0, 1($a0)
+               move $a1, $s2
+               jal strcpy
+               addi $s2, $s2, 2
+               addi $s3, $s3, -1
+               j while_precedence
+         just_push:
+            addi $s3, $s3, 1
+            sb $s5, 0($s3)
+         j infixToPostfix_increment
+
+      infixToPostfix_increment:
+         addi $s0, $s0, 1
+         j infixToPostfix_loop
+
+   infixToPostfix_loop_end:
+      while_appendRemaining:
+         lb $t0, 0($s3)
+         beq $t0, $0, return_postfix
+         la $a0, str1
+         li $t1, ' '
+         sb $t1, 0($a0)
+         sb $t0, 1($a0)
+         move $a1, $s2  
+         jal strcpy
+         addi $s2, $s2, 2
+         addi $s3, $s3, -1
+         j while_appendRemaining
+
+   return_postfix:
+      la $v0, postfixExpression
+      move $sp, $fp
+      lw $ra, 0($sp)
+      addi $sp, $sp, 4
+      jr $ra
+
+
+postfixCal:
+   # a0 = postfix expression, v0 = result, v1 = output invalid
+
+   addi $sp, $sp, -4
+   sw $ra, 0($sp)
+
+   jal strLen
+   
+   li $s0, 0         # int i = 0
+   li $s1, 0         # isNegative = false
+   move $s2, $a1     # &invalid
+   la $s3, stack     # stack<float>
+   move $s4, $s3     # if s4 == s3 then stack empty
+   move $s5, $v0     # length of postfix string
+   
+   postfixCal_loop:
+      beq $s0, $s5, postfixCal_loop_end
+      la $a0, postfixExpression
+      add $t0, $a0, $s0
+      lb $s6, 0($t0) # postfix[i]
+      
+      beq $s6, ' ', postfixCal_increment
+
+      bne $s6, '-', ifDigit2
+      addi $t0, $s0, 1
+      add $t0, $a0, $t0
+      lb $a0, 0($t0)
+      jal isdigit
+      bne $v0, 0; ifDigit2
+      # if (postfix[i] == '-' && isdigit(str[i + 1])
+         li $s1, 1
+         addi $s0, $s0, 1
+      
+      ifDigit2:
+      move $a0, $s6
+      jal isdigit
+      bne $v0, 1, else_evaluate
+      # if (isdigit(postfix[i])) 
+         lwc1 $f20, const0    # val = 0.0
+         lwc1 $f21, const0    # fraction = 0.0
+         while_conversion:
+         beq $s0, $s5, end_conversion
+         la $t0, postfixExpression
+         add $t0, $t0, $s0
+         lb $a0, 0($t0)
+         jal isdigit
+         beq $v0, 0, end_conversion
+
+            lwc1 $f14, const10
+            mul.s $f20, $f20, $f14
+            addi $a0, $a0, -48
+            mtc1 $a0, $f14
+            cvt.s.w $f14, $f14
+            add.s $f20, $f20, $f14
+            addi $s0, $s0, 1
+            j while_conversion
+         end_conversion:
+
+         la $a0, postfixExpression
+         add $a0, $a0, $s0 
+         lb $a0, 0($a0)
+         bne $a0, '.', end_fraction
+            addi $s0, $s0, 1
+            lwc1 $f22, const10
+            while_fraction:
+            beq $s0, $s5, end_fraction
+            la $t0, postfixExpression
+            add $t0, $t0, $s0
+            lb $a0, 0($t0)
+            jal isdigit
+            beq $v0, 0, end_fraction
+               addi $a0, $a0, -48
+               mtc1 $a0, $f14
+               cvt.s.w $f14, $f14
+               div.s $f14, $f14, $f22
+               add.s $f21, $f21, $f14
+               lwc1 $f14, const10
+               mul.s $f22, $f22, $f14
+               addi $s0, $s0, 1
+               j while_fraction
+            end_fraction:
+               addi $s0, $s0, -1
+               add.s $f20, $f20, $f21
+               beq $s1, 0, stack_push
+               neg.s $f20, $f20
+               li $s1, 0
+            stack_push:
+               addi $s3, $s3, 4
+               swc1 $f20, 0($s3)
+            j postfixCal_increment
+
+      else_evaluate:
+         beq $s4, $s3, return1_1
+
+         lwc1 $f20, 0($s3) # val1
+         addi $s3, $s3, -4
+
+         bne $s6, '!', continue_evaluate
+         lwc1 $f14, const0
+         c.lt.s $f20, $f14
+         bc1t return1_2
+
+         lwc1 $f14, constUpperFactorial
+         c.le.s $f20, $f14 
+         bc1f return1_3
+
+         cvt.w.s $f12, $f20
+         cvt.s.w $f12, $f12
+         c.eq.s $f20, $f12
+         bc1f return1_4
+
+         cvt.w.s $f20, $f20
+         mfc1 $f20, $a0
+
+         sll $a0, $a0, 2
+         la $a1, fact
+         add $a0, $a0, $a1
+         lwc1 $f15, 0($a0)
+
+         addi $s3, $s3, 4
+         swc1 $f15, 0($s3)
+         j postfixCal_increment
+      
+      continue_evaluate:
+         beq $s3, $s4, return1_1
+
+         lwc1 $f21, 0($s3) # val2
+         addi $s3, $s3, -4
+
+         bne $s6, '+', go_minus
+            add.s $f20, $f20, $f21
+            addi $s3, $s3, 1
+            swc1 $f20, 0($s3)
+            j postfixCal_increment
+
+         go_minus:
+         bne $s6, '-', go_multiply
+            sub.s $f20, $f20, $f21
+            addi $s3, $s3, 1
+            swc1 $f20, 0($s3)
+            j postfixCal_increment
+
+         go_multiply:
+         bne $s6, '*', go_divide
+            mul.s $f20, $f20, $f21
+            addi $s3, $s3, 1
+            swc1 $f20, 0($s3)
+            j postfixCal_increment
+
+         go_divide:
+         bne $s6, '/', go_power
+            div.s $f20, $f20, $f21
+            addi $s3, $s3, 1
+            swc1 $f20, 0($s3)
+            j postfixCal_increment
+
+         go_power:
+            
+
+               
+
+
+
+
+
 
 
 
