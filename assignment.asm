@@ -4,6 +4,7 @@
    input: .space 101
    validatedString: .space 200
    postfixExpression: .space 200
+   # postfixExpression: .asciiz "-2 -2 /"
 
    stringLength: .word 0
    resultString: .space 100
@@ -13,6 +14,8 @@
    f_to_s_result: .space 100
    str1: .space 100
    str2: .space 100
+
+   .align 2
    stack: .space 400
    ### string
 
@@ -41,35 +44,43 @@
    error1_5: .asciiz "MATH ERROR: DIVISION BY ZERO!\n"
 
 .text
-# factorial:
-#    lwc1 $f0, const1  # fact[index]
-#    li $t1, 0                # index
-#    la $t2, fact
-#    factorial_loop:
-#       bgt $t1, 1, fact_else
-#       swc1 $f0, 0($t2)
-#       j fact_increment
-#    fact_else:
-#    	mtc1 $t1, $f2  
-#       cvt.s.w $f2, $f2
-#       mul.s $f0, $f0, $f2
-#       swc1 $f0, 0($t2)
-#    fact_increment:
-#       addi $t1, $t1, 1
-#       addi $t2, $t2, 4
-#       beq $t1, 35, main
-#       j factorial_loop
-# test:
-#    la $a0, inPrompt
-#    la $a1, quitCommand
-#    jal strAppend
+factorial:
+   lwc1 $f0, const1  # fact[index]
+   li $t1, 0                # index
+   la $t2, fact
+   factorial_loop:
+      bgt $t1, 1, fact_else
+      swc1 $f0, 0($t2)
+      j fact_increment
+   fact_else:
+   	mtc1 $t1, $f2  
+      cvt.s.w $f2, $f2
+      mul.s $f0, $f0, $f2
+      swc1 $f0, 0($t2)
+   fact_increment:
+      addi $t1, $t1, 1
+      addi $t2, $t2, 4
+      beq $t1, 35, main
+      # beq $t1, 35, test
+      j factorial_loop
 
-#    la $a0, inPrompt
-#    li $v0, 4
+# test:
+#    la $a0, postfixExpression
+#    jal postfixCal
+
+#    move $a0, $v0
+#    li $v0, 1
 #    syscall
 
-#    j exit
+#    li $v0, 11
+#    li $a0, '\n'
+#    syscall
 
+#    li $v0, 2
+#    mov.s $f12, $f0
+#    syscall
+   
+#    j exit
 
 main:
    li $v0, 4
@@ -143,6 +154,31 @@ main:
       li $v0, 11
       li $a0, '\n'
       syscall
+
+      la $a0, postfixExpression
+      jal postfixCal
+
+      bne $v0, 0, checkForErrors
+
+      la $a0, preAns
+      swc1 $f0, 0($a0)
+      mov.s $f12, $f0
+      la $a0, preAns
+      li $v0, 2
+      syscall
+
+      li $a0, '\n'
+      li $v0, 11
+      syscall
+
+      j while
+
+      checkForErrors:
+      beq $v0, 1, Error1_1
+      beq $v0, 2, Error1_2
+      beq $v0, 3, Error1_3
+      beq $v0, 4, Error1_4
+      beq $v0, 5, Error1_5
 
       j while
       ##############################
@@ -964,16 +1000,17 @@ infixToPostfix:
 
 
 postfixCal:
-   # a0 = postfix expression, v0 = result, v1 = output invalid
+   # a0 = postfix expression, f0 = result, v0 = output invalid
 
    addi $sp, $sp, -4
+   move $fp, $sp
    sw $ra, 0($sp)
 
    jal strLen
    
    li $s0, 0         # int i = 0
    li $s1, 0         # isNegative = false
-   move $s2, $a1     # &invalid
+   # move $s2, $a1     # &invalid
    la $s3, stack     # stack<float>
    move $s4, $s3     # if s4 == s3 then stack empty
    move $s5, $v0     # length of postfix string
@@ -991,12 +1028,15 @@ postfixCal:
       add $t0, $a0, $t0
       lb $a0, 0($t0)
       jal isdigit
-      bne $v0, 0; ifDigit2
+      beq $v0, 0, ifDigit2
       # if (postfix[i] == '-' && isdigit(str[i + 1])
          li $s1, 1
          addi $s0, $s0, 1
       
       ifDigit2:
+      la $a0, postfixExpression
+      add $a0, $a0, $s0
+      lb $s6, 0($a0)
       move $a0, $s6
       jal isdigit
       bne $v0, 1, else_evaluate
@@ -1025,34 +1065,35 @@ postfixCal:
          add $a0, $a0, $s0 
          lb $a0, 0($a0)
          bne $a0, '.', end_fraction
+
+         addi $s0, $s0, 1
+         lwc1 $f22, const10
+         while_fraction:
+         beq $s0, $s5, end_fraction
+         la $t0, postfixExpression
+         add $t0, $t0, $s0
+         lb $a0, 0($t0)
+         jal isdigit
+         beq $v0, 0, end_fraction
+            addi $a0, $a0, -48
+            mtc1 $a0, $f14
+            cvt.s.w $f14, $f14
+            div.s $f14, $f14, $f22
+            add.s $f21, $f21, $f14
+            lwc1 $f14, const10
+            mul.s $f22, $f22, $f14
             addi $s0, $s0, 1
-            lwc1 $f22, const10
-            while_fraction:
-            beq $s0, $s5, end_fraction
-            la $t0, postfixExpression
-            add $t0, $t0, $s0
-            lb $a0, 0($t0)
-            jal isdigit
-            beq $v0, 0, end_fraction
-               addi $a0, $a0, -48
-               mtc1 $a0, $f14
-               cvt.s.w $f14, $f14
-               div.s $f14, $f14, $f22
-               add.s $f21, $f21, $f14
-               lwc1 $f14, const10
-               mul.s $f22, $f22, $f14
-               addi $s0, $s0, 1
-               j while_fraction
-            end_fraction:
-               addi $s0, $s0, -1
-               add.s $f20, $f20, $f21
-               beq $s1, 0, stack_push
-               neg.s $f20, $f20
-               li $s1, 0
-            stack_push:
-               addi $s3, $s3, 4
-               swc1 $f20, 0($s3)
-            j postfixCal_increment
+            j while_fraction
+         end_fraction:
+            addi $s0, $s0, -1
+            add.s $f20, $f20, $f21
+            beq $s1, 0, stack_push
+            neg.s $f20, $f20
+            li $s1, 0
+         stack_push:
+            addi $s3, $s3, 4
+            swc1 $f20, 0($s3)
+         j postfixCal_increment
 
       else_evaluate:
          beq $s4, $s3, return1_1
@@ -1074,8 +1115,8 @@ postfixCal:
          c.eq.s $f20, $f12
          bc1f return1_4
 
-         cvt.w.s $f20, $f20
-         mfc1 $f20, $a0
+         cvt.w.s $f14, $f20
+         mfc1 $a0, $f14
 
          sll $a0, $a0, 2
          la $a1, fact
@@ -1094,34 +1135,81 @@ postfixCal:
 
          bne $s6, '+', go_minus
             add.s $f20, $f20, $f21
-            addi $s3, $s3, 1
+            addi $s3, $s3, 4
             swc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_minus:
          bne $s6, '-', go_multiply
-            sub.s $f20, $f20, $f21
-            addi $s3, $s3, 1
+            sub.s $f20, $f21, $f20
+            addi $s3, $s3, 4
             swc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_multiply:
          bne $s6, '*', go_divide
             mul.s $f20, $f20, $f21
-            addi $s3, $s3, 1
+            addi $s3, $s3, 4
             swc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_divide:
          bne $s6, '/', go_power
-            div.s $f20, $f20, $f21
-            addi $s3, $s3, 1
+            lwc1 $f14, const0
+            c.eq.s $f20, $f14
+            bc1t return1_5
+
+            div.s $f20, $f21, $f20
+            addi $s3, $s3, 4
             swc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_power:
-            
+            mov.s $f12, $f21
+            trunc.w.s $f14, $f20
+            mfc1 $a0, $f14
+            jal pow
+            mov.s $f20, $f0
+            addi $s3, $s3, 4
+            swc1 $f20, 0($s3)
+            j postfixCal_increment
+      postfixCal_increment:
+         addi $s0, $s0, 1
+         j postfixCal_loop
 
+   postfixCal_loop_end:
+      sub $t0, $s3, $s4
+      beq $t0, 4, return_smooth
+   return1_1:
+      li $v0, 1
+      j errorReturn
+   return1_2:
+      li $v0, 2
+      j errorReturn
+   return1_3:  
+      li $v0, 3
+      j errorReturn
+   return1_4:
+      li $v0, 4
+      j errorReturn
+   return1_5:
+      li $v0, 5
+      j errorReturn
+   
+   errorReturn:
+      move $sp, $fp
+      lw $ra, 0($sp)
+      addi $sp, $sp, 4
+      jr $ra
+
+   return_smooth:
+      lwc1 $f0, 0($s3)
+      li $v0, 0
+
+      move $sp, $fp
+      lw $ra, 0($sp)
+      addi $sp, $sp, 4
+      jr $ra
                
 
 
