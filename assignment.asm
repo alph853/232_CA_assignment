@@ -27,9 +27,12 @@
    const0: .float 0.0
    const1: .float 1.0
    const10: .float 10.0
-   constFloat: .float 145234.5432
+   constFloat: .float -6
    preAns: .float 0.0
    to_string_preAns: .space 20
+   newline: .asciiz "\n"
+   filename: .asciiz "log.txt"
+
 
    # error messages
    error0: .asciiz "SYNTAX ERROR: INVALID PARENTHESES!\n"
@@ -44,6 +47,25 @@
    error1_5: .asciiz "MATH ERROR: DIVISION BY ZERO!\n"
 
 .text
+   # open file
+   li $v0, 13
+   la $a0, filename
+   li $a1, 9   # append flag
+   li $a2, 0
+   syscall
+
+# test:
+#    lwc1 $f12, constFloat
+#    li $a0, 6
+#    jal float_to_string
+
+#    move $a0, $v0
+#    li $v0, 4
+#    syscall
+
+#    j exit
+
+
 factorial:
    lwc1 $f0, const1  # fact[index]
    li $t1, 0                # index
@@ -120,7 +142,6 @@ main:
       move $a0, $v0
       la $a1, to_string_preAns
       jal strcpy
-
       la $a0, input
       la $a1, validatedString
       jal strcpy
@@ -160,16 +181,53 @@ main:
 
       bne $v0, 0, checkForErrors
 
+      #  valid input
+      # print output
       la $a0, preAns
       swc1 $f0, 0($a0)
       mov.s $f12, $f0
       la $a0, preAns
       li $v0, 2
       syscall
-
+      
       li $a0, '\n'
       li $v0, 11
       syscall
+
+      # # store input \n preAns and save to file
+      # la $a0, input
+      # jal strLen
+      # move $a2, $v0
+      # la $a0, input
+      # li $v0, 15
+      # la $a1, buffer
+      # syscall
+
+      # la $a0, newline
+      # li $a2, 1
+      # li $v0, 15
+      # la $a1, buffer
+      # syscall
+
+      # li $a0, 6
+      # # move $f12, $f0
+      # jal float_to_string
+      # move $a0, $v0
+      # la $a1, to_string_preAns
+      # jal strcpy
+
+      # la $a0, to_string_preAns
+      # jal strLen
+      # move $a2, $v0
+      # li $v0, 15
+      # la $a1, buffer
+      # syscall
+
+      # la $a0, newline
+      # li $a2, 1
+      # li $v0, 15
+      # la $a1, buffer
+      # syscall
 
       j while
 
@@ -416,7 +474,7 @@ strcpy:
 
 
 float_to_string:
-   # this function only handles postive fp numbers
+
    # ARGUMENT: f12 = float, a0 = number of decimal places
    # RETURN  : v0 = start address of returned string
    # integer part stored in a0
@@ -425,6 +483,15 @@ float_to_string:
 
    lwc1 $f14, const1
    lwc1 $f0, const10
+
+   # negate if negative and set isNegative
+   li $t4, 0      # isNegative = false
+   lwc1 $f15, const0
+   c.lt.s $f12, $f15
+   bc1f decimal_loop
+      li $t4, 1
+      neg.s $f12, $f12
+
    decimal_loop:
       beq $a0, $0, end_decimal_loop
       mul.s $f14, $f14, $f0
@@ -439,6 +506,12 @@ float_to_string:
    # save the integer part to f_to_s_result
    move $a0, $v0
    la $a1, f_to_s_result
+   # store the unary sign 
+   beq $t4, 0, copy_to_a1
+      li $t0, '-'
+      sb $t0, 0($a1)
+      addi $a1, $a1, 1
+   copy_to_a1:
    jal strcpy
 
    # a0 is now at '\0' so rewrite as '.'
@@ -584,7 +657,8 @@ validateString:
 
       bne $s3, 'M', elseif_space
       # if (expr[i] == 'M')
-         beq $s0, $0, if_elseif
+         li $s2, 0   # checkNegative = false
+         beq $s0, $0, if_checkSyntax
          # if (i > 0) 
             addi $t0, $s0, -1
             add $t2, $a0, $t0
@@ -592,7 +666,7 @@ validateString:
             jal isdigit
             beq $v0, 1, insert_multiplication
             beq $a0, ')', insert_multiplication
-            j if_elseif
+            j if_if_elseif
             insert_multiplication:
                la $a0, validatedString
                la $a1, star
@@ -600,8 +674,21 @@ validateString:
                jal strInsert
                move $a0, $v0
                addi $s0, $s0, 1
-               j substitute_ans
-         if_elseif:
+               j if_checkSyntax
+            if_if_elseif:
+            bne $a0, '-', if_checkSyntax
+            lwc1 $f14, preAns       
+            lwc1 $f15, const0
+            c.lt.s $f14, $f15 
+            bc1f if_checkSyntax
+               la $a0, validatedString
+               addi $t0, $s0, -1
+               add $a0, $a0, $t0
+               li $t1, '+'
+               sb $t1, 0($a0)
+               li $s2, 1    # checkNegative = true
+               
+         if_checkSyntax:
             la $a0, validatedString
             jal strLen
             addi $t0, $s0, 1
@@ -619,20 +706,22 @@ validateString:
                lw $ra, 0($sp)
                addi $sp, $sp, 4
                jr $ra
-         substitute_ans:
-            la $a0, validatedString
-            move $a1, $s0
-            li $a2, 1
-            jal erase
-            la $a0, validatedString
-            la $a1, to_string_preAns
-            move $a2, $s0
-            jal strInsert
-            la $a0, to_string_preAns
-            jal strLen
-            add $s0, $s0, $v0
-            addi $s0, $s0, -1
-            j validated_increment
+      substitute_ans:
+         la $a0, validatedString
+         move $a1, $s0
+         li $a2, 1
+         jal erase
+         la $a0, validatedString
+         la $a1, to_string_preAns
+         add $a1, $s2, $a1      # address = a1 + 1 if negative to remove the '-' sign
+         move $a2, $s0
+         jal strInsert
+         la $a0, to_string_preAns
+         jal strLen
+         add $s0, $s0, $v0
+         sub $s0, $s0, $s2
+         addi $s0, $s0, -1
+      j validated_increment
 
       elseif_space:
       bne $s3, ' ', elseif_dot
@@ -815,7 +904,21 @@ validateString:
          j validatedString_loop
 
    validatedString_loop_end:
-      # check balance
+      la $a0, validatedString
+      lb $t0, 1($a0)
+      bne $t0, '-', check_balance
+         lb $t1, 0($a0)
+         bne $t1, '+', if_elseif_minus
+            li $a1, 0
+            li $a2, 1
+            jal erase 
+            j check_balance
+         if_elseif_minus:
+            li $a1, 0
+            li $a2, 2
+            jal erase
+
+      check_balance:
       beq $s4, $0, return
       j return0
 
@@ -992,6 +1095,7 @@ infixToPostfix:
          j while_appendRemaining
 
    return_postfix:
+      sb $0, 0($s2)
       la $v0, postfixExpression
       move $sp, $fp
       lw $ra, 0($sp)

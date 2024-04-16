@@ -2,6 +2,8 @@
 #include <stack>
 #include <string>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 
 using namespace std;
 
@@ -37,15 +39,26 @@ int validateString(string &expr) {
    int balance = 0;
    for (int i = 0; i < expr.length(); i++) {
       if (expr[i] == 'M') {
-         if (i > 0 && (isdigit(expr[i - 1]) || expr[i - 1] == ')')) {
-            expr.insert(i++, "*");
+         double truePreAns = preAns;
+         if (i > 0) { 
+            if (isdigit(expr[i - 1]) || expr[i - 1] == ')') {
+               expr.insert(i++, "*");
+            }
+            else if (expr[i - 1] == '-' && preAns < 0) {
+               expr[i - 1] = '+'; 
+               truePreAns *= -1;
+            }
          }
-         else if (i + 1 < expr.length() && (isdigit(expr[i + 1]) || expr[i + 1] == '.')) {
+
+         if (i + 1 < expr.length() && (isdigit(expr[i + 1]) || expr[i + 1] == '.')) {
             return 4; // syntax error near 'M' character
          }
+
          expr.erase(i, 1);
-         expr.insert(i, to_string(preAns));
-         i += int_to_string(preAns).length() - 1;
+         std::ostringstream sobj;
+         sobj << std::fixed << std::setprecision(0) << truePreAns;
+         expr.insert(i, sobj.str());
+         i += sobj.str().length() - 1;
       }
       else if (expr[i] == ' ')
          expr.erase(i, 1);
@@ -64,6 +77,7 @@ int validateString(string &expr) {
             expr.insert(++i, "*");
          }
          if (balance == 0) {
+            cout << 0;
             return 0; // parentheses error
          }
          balance--;
@@ -95,9 +109,21 @@ int validateString(string &expr) {
       else if (!validOps(expr[i]) && !isdigit(expr[i])) {
          return 1; // syntax error: contains invalid character
       }
+      // cout << "expr[" << i << "] = " << expr[i] << ": " << balance << '\n';
+      // cout << "expr = " << expr << '\n';
    }
 
+   // if (expr[1] == '-') {
+   //    if (expr[0] == '+') {
+   //       expr.erase(0, 1);
+   //    }
+   //    else if (expr[0] == '-') {
+   //       expr.erase(0, 2);
+   //    }
+   // }
+
    if (balance) {
+      cout << 1;
       return 0; // parentheses error
    }
    std::cout << "validated_string: " << expr << '\n';
