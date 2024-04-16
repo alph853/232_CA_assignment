@@ -9,6 +9,7 @@ using namespace std;
 
 int fact[37];
 double preAns = 0;
+bool inverted = 0;
 
 bool validOps(char c) {
    return c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '!';
@@ -23,8 +24,10 @@ int precedence(char op) {
       return 1;
    if (op == '*' || op == '/')
       return 2;
-   if (op == '^')
+   if (op == '_') 
       return 3;
+   if (op == '^')
+      return 4;
    if (op == '!')
       return 4;
    return 0; 
@@ -135,17 +138,24 @@ string infixToPostfix(const string &expr) {
 
    for (int i = 0; i < expr.length(); i++) {
       if (expr[i] == '-' || expr[i] == '+') {
-         bool unary = false;
-         if (i == 0) {
-            unary = true;
-         }
-         else if (!isDigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!') {
-            unary = true;
-         }
+         // bool unary = false;
+         // if (i == 0) {
+         //    unary = true;
+         // }
+         // else if (!isDigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!') {
+         //    unary = true;
+         // }
+
+         // if (unary) {
+         //    if (expr[i] == '-')
+         //       postfix += '-';
+         //    i++;
+         // }
+         bool unary = (i == 0) || (!isDigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!');
 
          if (unary) {
             if (expr[i] == '-')
-               postfix += '-';
+               s.push('_');
             i++;
          }
       }
@@ -262,6 +272,10 @@ double postfixExp(string& str, int& invalid) {
                return -1;
             }
             s.push(fact[(int)val1]);
+            continue;
+         }
+         else if (str[i] == '_') {
+            s.push(-val1);
             continue;
          }
 

@@ -23,7 +23,7 @@
    quitCommand: .asciiz "quit"
    quitPrompt: .asciiz "EXIT!"
    fact: .double 0:100
-   constUpperFactorial: .word 25
+   constUpperFactorial: .word 70
    const0: .double 0
    const1: .double 1
    const2: .double 2
@@ -508,12 +508,14 @@ precedence:
    li $v0, 1
    beq $a0, '+', precedence_end
    beq $a0, '-', precedence_end
-   li $v0, 2
+   addi $v0, $v0, 1
    beq $a0, '*', precedence_end
    beq $a0, '/', precedence_end
-   li $v0, 3
+   addi $v0, $v0, 1
+   beq $a0, '_', precedence_end
+   addi $v0, $v0, 1
    beq $a0, '^', precedence_end
-   li $v0, 4
+   addi $v0, $v0, 1
    beq $a0, '!', precedence_end
    li $v0, 0
    precedence_end:
@@ -568,6 +570,7 @@ validateString:
             addi $t0, $s0, 1
             beq $t0, $s1, validated_increment
             # if (i + 1 < expr.length())
+            la $a0, validatedString
             add $a0, $a0, $t0
             lb $a0, 0($a0)
             jal isDigit
@@ -827,11 +830,9 @@ infixToPostfix:
          beq $a0, '!', ifDigit
          unary_true:
             bne $s5, '-', just_increment_s0
-            la $a0, str1
-            sb $s5, 0($a0)
-            move $a1, $s2
-            jal strcpy
-            addi $s2, $s2, 1
+            addi $s3, $s3, 1
+            li $t0, '_'
+            sb $t0, 0($s3)
             just_increment_s0:
             addi $s0, $s0, 1
          j ifDigit
@@ -1078,12 +1079,14 @@ postfixCal:
          ldc1 $f20, 0($s3) # val1
          addi $s3, $s3, -8
 
-         bne $s6, '!', continue_evaluate
+         bne $s6, '!', check_unary_
          ldc1 $f14, const0
          c.lt.d $f20, $f14
          bc1t return1_2
 
-         ldc1 $f14, constUpperFactorial
+         la $a0, constUpperFactorial
+         mtc1 $a0, $f14
+         cvt.d.w $f14, $f14
          c.le.d $f20, $f14 
          bc1f return1_3
 
@@ -1104,6 +1107,13 @@ postfixCal:
          sdc1 $f16, 0($s3)
          j postfixCal_increment
       
+      check_unary_:
+         bne $s6, '_', continue_evaluate
+            neg.d $f20, $f20
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
+            j postfixCal_increment
+
       continue_evaluate:
          beq $s3, $s4, return1_1
 
