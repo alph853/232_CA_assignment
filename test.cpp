@@ -14,6 +14,10 @@ bool validOps(char c) {
    return c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '!';
 }
 
+bool isDigit(char c) {
+   return isdigit(c) || c == 'M';
+}
+
 int precedence(char op) {
    if (op == '+' || op == '-')
       return 1;
@@ -39,26 +43,20 @@ int validateString(string &expr) {
    int balance = 0;
    for (int i = 0; i < expr.length(); i++) {
       if (expr[i] == 'M') {
-         double truePreAns = preAns;
-         if (i > 0) { 
-            if (isdigit(expr[i - 1]) || expr[i - 1] == ')') {
-               expr.insert(i++, "*");
-            }
-            else if (expr[i - 1] == '-' && preAns < 0) {
-               expr[i - 1] = '+'; 
-               truePreAns *= -1;
-            }
+         if (i > 0 && isDigit(expr[i - 1]) || expr[i - 1] == ')') {
+            expr.insert(i++, "*");
          }
+         if (i + 1 < expr.length()) {
+            if (isDigit(expr[i + 1])) {
+               expr.insert(++i, "*");
+            }
+         } 
 
-         if (i + 1 < expr.length() && (isdigit(expr[i + 1]) || expr[i + 1] == '.')) {
-            return 4; // syntax error near 'M' character
-         }
-
-         expr.erase(i, 1);
-         std::ostringstream sobj;
-         sobj << std::fixed << std::setprecision(0) << truePreAns;
-         expr.insert(i, sobj.str());
-         i += sobj.str().length() - 1;
+         // expr.erase(i, 1);
+         // std::ostringstream sobj;
+         // sobj << std::fixed << std::setprecision(0) << truePreAns;
+         // expr.insert(i, sobj.str());
+         // i += sobj.str().length() - 1;
       }
       else if (expr[i] == ' ')
          expr.erase(i, 1);
@@ -67,13 +65,13 @@ int validateString(string &expr) {
             return 2; // syntax error: invalid '.' character
       }
       else if (expr[i] == '(' ) {
-         if (i != 0 && (expr[i - 1] == ')' || isdigit(expr[i - 1]) || expr[i - 1] == '!')) {
+         if (i != 0 && (expr[i - 1] == ')' || isDigit(expr[i - 1]) || expr[i - 1] == '!')) {
             expr.insert(i++, "*");
          }
          balance++;
       } 
       else if (expr[i] == ')') {
-         if (i + 1 < expr.length() && isdigit(expr[i + 1])) {
+         if (i + 1 < expr.length() && isDigit(expr[i + 1])) {
             expr.insert(++i, "*");
          }
          if (balance == 0) {
@@ -102,11 +100,11 @@ int validateString(string &expr) {
             expr.erase(i--, 1);
       }
       else if (expr[i] == '!') {
-         if (i + 1 < expr.length() && (isdigit(expr[i + 1]) || expr[i + 1] == '!')) {
+         if (i + 1 < expr.length() && (isDigit(expr[i + 1]) || expr[i + 1] == '!')) {
             return 3; // syntax error: invalid '!' character
          }
       }
-      else if (!validOps(expr[i]) && !isdigit(expr[i])) {
+      else if (!validOps(expr[i]) && !isDigit(expr[i])) {
          return 1; // syntax error: contains invalid character
       }
       // cout << "expr[" << i << "] = " << expr[i] << ": " << balance << '\n';
@@ -141,7 +139,7 @@ string infixToPostfix(const string &expr) {
          if (i == 0) {
             unary = true;
          }
-         else if (!isdigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!') {
+         else if (!isDigit(expr[i - 1]) && expr[i - 1] != ')' && expr[i - 1] != '!') {
             unary = true;
          }
 
@@ -156,7 +154,7 @@ string infixToPostfix(const string &expr) {
          i++;
       }
 
-      if (isdigit(expr[i])) {
+      if (isDigit(expr[i])) {
          postfix += expr[i];
          isNum = true;
       } 
@@ -203,7 +201,7 @@ double postfixExp(string& str, int& invalid) {
       if (str[i] == ' ')
          continue;
 
-      if (str[i] == '-' && isdigit(str[i + 1])) {
+      if (str[i] == '-' && isDigit(str[i + 1])) {
          isNegative = true;
          i++;
       }
@@ -232,6 +230,14 @@ double postfixExp(string& str, int& invalid) {
          }
          s.push(val);
       } 
+      else if (str[i] == 'M') {
+         if (isNegative) {
+            s.push(-preAns);
+            isNegative = false;
+         }
+         else
+            s.push(preAns);
+      }
       else {
          // invalid
          if (s.empty()) {

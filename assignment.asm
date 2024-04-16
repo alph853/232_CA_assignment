@@ -15,21 +15,21 @@
    str1: .space 100
    str2: .space 100
 
-   .align 2
+   .align 3
    stack: .space 400
    ### string
 
    prompt: .asciiz "\n>> "
    quitCommand: .asciiz "quit"
    quitPrompt: .asciiz "EXIT!"
-   fact: .float 0:35
-   constUpperFactorial: .float 36.0
-   const0: .float 0.0
-   const1: .float 1.0
-   const10: .float 10.0
-   constFloat: .float -6
-   preAns: .float 0.0
-   to_string_preAns: .space 20
+   fact: .double 0:100
+   constUpperFactorial: .word 25
+   const0: .double 0
+   const1: .double 1
+   const2: .double 2
+   const10: .double 10
+   constdouble: .double -6
+   preAns: .double 0
    newline: .asciiz "\n"
    filename: .asciiz "log.txt"
 
@@ -47,17 +47,17 @@
    error1_5: .asciiz "MATH ERROR: DIVISION BY ZERO!\n"
 
 .text
-   # open file
-   li $v0, 13
-   la $a0, filename
-   li $a1, 9   # append flag
-   li $a2, 0
-   syscall
+   # # open file
+   # li $v0, 13
+   # la $a0, filename
+   # li $a1, 9   # append flag
+   # li $a2, 0
+   # syscall
 
 # test:
-#    lwc1 $f12, constFloat
+#    ldc1 $f12, constdouble
 #    li $a0, 6
-#    jal float_to_string
+#    jal double_to_string
 
 #    move $a0, $v0
 #    li $v0, 4
@@ -67,24 +67,25 @@
 
 
 factorial:
-   lwc1 $f0, const1  # fact[index]
-   li $t1, 0                # index
-   la $t2, fact
+   ldc1 $f0, const1  # fact[index-1]
+   ldc1 $f2, const1
+   ldc1 $f4, const2  # index
+
+   la $t0, fact
+   li $t1, 2
+   la $t2, constUpperFactorial
+   lw $t2, 0($t2)
+   sdc1 $f2, 0($t0)
+   sdc1 $f2, 8($t0)
+   addi $t0, $t0, 16
    factorial_loop:
-      bgt $t1, 1, fact_else
-      swc1 $f0, 0($t2)
-      j fact_increment
-   fact_else:
-   	mtc1 $t1, $f2  
-      cvt.s.w $f2, $f2
-      mul.s $f0, $f0, $f2
-      swc1 $f0, 0($t2)
-   fact_increment:
+      mul.d $f0, $f0, $f4
+      sdc1 $f0, 0($t0)
+
+      addi $t0, $t0, 8
       addi $t1, $t1, 1
-      addi $t2, $t2, 4
-      beq $t1, 35, main
-      # beq $t1, 35, test
-      j factorial_loop
+      add.d $f4, $f4, $f2
+      bne $t2, $t1, factorial_loop
 
 # test:
 #    la $a0, postfixExpression
@@ -99,7 +100,7 @@ factorial:
 #    syscall
 
 #    li $v0, 2
-#    mov.s $f12, $f0
+#    mov.d $f12, $f0
 #    syscall
    
 #    j exit
@@ -136,12 +137,6 @@ main:
       jal strCmp
       beq $v0, 1, exit
       # else process string
-      lwc1 $f12, preAns
-      li $a0, 6
-      jal float_to_string
-      move $a0, $v0
-      la $a1, to_string_preAns
-      jal strcpy
       la $a0, input
       la $a1, validatedString
       jal strcpy
@@ -184,10 +179,9 @@ main:
       #  valid input
       # print output
       la $a0, preAns
-      swc1 $f0, 0($a0)
-      mov.s $f12, $f0
-      la $a0, preAns
-      li $v0, 2
+      sdc1 $f0, 0($a0)
+      mov.d $f12, $f0
+      li $v0, 3
       syscall
       
       li $a0, '\n'
@@ -211,7 +205,7 @@ main:
 
       # li $a0, 6
       # # move $f12, $f0
-      # jal float_to_string
+      # jal double_to_string
       # move $a0, $v0
       # la $a1, to_string_preAns
       # jal strcpy
@@ -459,8 +453,7 @@ erase:
    move $v0, $t5
    jr $ra
 
-strcpy:
-   # a0 = address of string, a1 = address to save the string
+strcpy:# a0 = address of string, a1 = address to save the string
    # a1 will points to the strLen
    save_loop:
       lb $t0, 0($a0)
@@ -472,96 +465,6 @@ strcpy:
    end_save:
       jr $ra
 
-
-float_to_string:
-
-   # ARGUMENT: f12 = float, a0 = number of decimal places
-   # RETURN  : v0 = start address of returned string
-   # integer part stored in a0
-   addi $sp, $sp, -4
-   sw $ra, 0($sp)
-
-   lwc1 $f14, const1
-   lwc1 $f0, const10
-
-   # negate if negative and set isNegative
-   li $t4, 0      # isNegative = false
-   lwc1 $f15, const0
-   c.lt.s $f12, $f15
-   bc1f decimal_loop
-      li $t4, 1
-      neg.s $f12, $f12
-
-   decimal_loop:
-      beq $a0, $0, end_decimal_loop
-      mul.s $f14, $f14, $f0
-      addi $a0, $a0, -1
-      j decimal_loop
-   end_decimal_loop:
-
-   # integer part
-   trunc.w.s $f0, $f12
-   mfc1 $a0, $f0
-   jal int_to_string
-   # save the integer part to f_to_s_result
-   move $a0, $v0
-   la $a1, f_to_s_result
-   # store the unary sign 
-   beq $t4, 0, copy_to_a1
-      li $t0, '-'
-      sb $t0, 0($a1)
-      addi $a1, $a1, 1
-   copy_to_a1:
-   jal strcpy
-
-   # a0 is now at '\0' so rewrite as '.'
-   li $t0, '.'
-   sb $t0, 0($a1)
-   addi $a1, $a1, 1
-
-   # fraction part multiplied by 10^decimal places
-   trunc.w.s $f1, $f12
-   cvt.s.w $f1, $f1
-   sub.s $f1, $f12, $f1
-   mul.s $f0, $f1, $f14
-   trunc.w.s $f0, $f0
-   mfc1 $a0, $f0
-   jal int_to_string
-   # save the fraction part to after the '.' of f_to_s_result
-   move $a0, $v0  # a1 is at the start of fraction part
-   jal strcpy
-   sb $0, 0($a1)  # end of string
-
-   la $v0, f_to_s_result
-   lw $ra, 0($sp)
-   addi $sp, $sp, 4
-   jr $ra
-
-int_to_string: 
-   # this function only handles postive integers
-   # ARGUMENT: a0 = integer
-   # RETURN  : v0 = start address of returned string
-   li $t0, 10
-   move $t1, $a0
-
-   # start of the returned string
-   move $t2, $sp
-   addi $sp, $sp, -1
-   sb $0, 0($sp)
-   addi $sp, $sp, -1
-   int_to_string_loop:
-      div $t1, $t0
-      mflo $t1
-      mfhi $t3
-      addi $t3, $t3, '0'
-      sb $t3, 0($sp)
-      beq $t1, $0, end_int_to_string_loop
-      addi $sp, $sp, -1
-      j int_to_string_loop
-   end_int_to_string_loop:
-      move $v0, $sp
-      move $sp, $t2
-      jr $ra
 
 strAppend:
    # a0 = string, a1 = string to append to string a0
@@ -585,22 +488,6 @@ strAppend:
 ########################################
 ########################################
 ###      expression functions      ###
-isdigit:
-   # a0 = character
-   # v0 = (isdigit)? 1 : 0
-   li $v0, 1
-   li $t0, '0'
-   li $t1, '9'
-   bge $a0, $t0, isdigit_else
-   li $v0, 0
-   j isdigit_end
-   isdigit_else:
-      ble $a0, $t1, isdigit_end
-      li $v0, 0
-   isdigit_end:
-      jr $ra
-
-
 validOps:
    # a0 = character
    # v0 = (valid)? 1 : 0
@@ -657,16 +544,15 @@ validateString:
 
       bne $s3, 'M', elseif_space
       # if (expr[i] == 'M')
-         li $s2, 0   # checkNegative = false
-         beq $s0, $0, if_checkSyntax
+         beq $s0, $0, if_if2
          # if (i > 0) 
             addi $t0, $s0, -1
             add $t2, $a0, $t0
             lb $a0, 0($t2)
-            jal isdigit
+            jal isDigit
             beq $v0, 1, insert_multiplication
             beq $a0, ')', insert_multiplication
-            j if_if_elseif
+            j if_if2
             insert_multiplication:
                la $a0, validatedString
                la $a1, star
@@ -674,54 +560,26 @@ validateString:
                jal strInsert
                move $a0, $v0
                addi $s0, $s0, 1
-               j if_checkSyntax
-            if_if_elseif:
-            bne $a0, '-', if_checkSyntax
-            lwc1 $f14, preAns       
-            lwc1 $f15, const0
-            c.lt.s $f14, $f15 
-            bc1f if_checkSyntax
-               la $a0, validatedString
-               addi $t0, $s0, -1
-               add $a0, $a0, $t0
-               li $t1, '+'
-               sb $t1, 0($a0)
-               li $s2, 1    # checkNegative = true
-               
-         if_checkSyntax:
+
+            if_if2:
             la $a0, validatedString
             jal strLen
+            move $s1, $v0
             addi $t0, $s0, 1
-            beq $t0, $v0, substitute_ans
-            la $a0, validatedString
-            add $t1, $t0, $a0
-            lb $a0, 0($t1)
-            jal isdigit
-            beq $v0, 1, return4
-            beq $a0, '.', return4
-            j substitute_ans
-            return4:
-               li $v0, 4
-               move $sp, $fp
-               lw $ra, 0($sp)
-               addi $sp, $sp, 4
-               jr $ra
-      substitute_ans:
-         la $a0, validatedString
-         move $a1, $s0
-         li $a2, 1
-         jal erase
-         la $a0, validatedString
-         la $a1, to_string_preAns
-         add $a1, $s2, $a1      # address = a1 + 1 if negative to remove the '-' sign
-         move $a2, $s0
-         jal strInsert
-         la $a0, to_string_preAns
-         jal strLen
-         add $s0, $s0, $v0
-         sub $s0, $s0, $s2
-         addi $s0, $s0, -1
-      j validated_increment
+            beq $t0, $s1, validated_increment
+            # if (i + 1 < expr.length())
+            add $a0, $a0, $t0
+            lb $a0, 0($a0)
+            jal isDigit
+            beq $v0, 0, validated_increment
+               # insert *
+               addi $s0, $s0, 1
+               la $a0, validatedString
+               la $a1, star
+               move $a2, $s0
+               jal strInsert
+               move $a0, $v0
+            j validated_increment
 
       elseif_space:
       bne $s3, ' ', elseif_dot
@@ -768,7 +626,7 @@ validateString:
          lb $a0, 0($t1)
          beq $a0, ')', insert_multiplication2
          beq $a0, '!', insert_multiplication2
-         jal isdigit
+         jal isDigit
          beq $v0, 1, insert_multiplication2
          j increBalance
          insert_multiplication2:
@@ -789,7 +647,7 @@ validateString:
          # la $a0, validatedString
          add $a0, $a0, $t0
          lb $a0, 0($a0)
-         jal isdigit
+         jal isDigit
          beq $v0, 0, checkBalance
 
          addi $s0, $s0, 1
@@ -875,7 +733,7 @@ validateString:
          add $t1, $a0, $t0
          lb $a0, 0($t1)
          beq $a0, '!', return3
-         jal isdigit
+         jal isDigit
          beq $v0, 1, return3
          j validated_increment
          # la $a0, validatedString
@@ -890,7 +748,7 @@ validateString:
          move $a0, $s3
          jal validOps
          beq $v0, 1, validated_increment
-         jal isdigit
+         jal isDigit
          beq $v0, 1, validated_increment
          return1:
             li $v0, 1
@@ -963,7 +821,7 @@ infixToPostfix:
          addi $t1, $s0, -1
          add $a0, $a0, $t1
          lb $a0, 0($a0)
-         jal isdigit
+         jal isDigit
          beq $v0, 1, ifDigit
          beq $a0, ')', ifDigit
          beq $a0, '!', ifDigit
@@ -993,7 +851,7 @@ infixToPostfix:
       lb $s5, 0($a0)
       
       lb $a0, 0($a0)
-      jal isdigit
+      jal isDigit
       bne $v0, 1, elseif_open1
       # if (isdigit(expr[i]))
          la $a0, str1
@@ -1115,7 +973,7 @@ postfixCal:
    li $s0, 0         # int i = 0
    li $s1, 0         # isNegative = false
    # move $s2, $a1     # &invalid
-   la $s3, stack     # stack<float>
+   la $s3, stack     # stack<double>
    move $s4, $s3     # if s4 == s3 then stack empty
    move $s5, $v0     # length of postfix string
    
@@ -1131,7 +989,7 @@ postfixCal:
       addi $t0, $s0, 1
       add $t0, $a0, $t0
       lb $a0, 0($t0)
-      jal isdigit
+      jal isDigit
       beq $v0, 0, ifDigit2
       # if (postfix[i] == '-' && isdigit(str[i + 1])
          li $s1, 1
@@ -1143,10 +1001,10 @@ postfixCal:
       lb $s6, 0($a0)
       move $a0, $s6
       jal isdigit
-      bne $v0, 1, else_evaluate
+      bne $v0, 1, else_if_M
       # if (isdigit(postfix[i])) 
-         lwc1 $f20, const0    # val = 0.0
-         lwc1 $f21, const0    # fraction = 0.0
+         ldc1 $f20, const0    # val = 0.0
+         ldc1 $f24, const0    # fraction = 0.0
          while_conversion:
          beq $s0, $s5, end_conversion
          la $t0, postfixExpression
@@ -1155,12 +1013,12 @@ postfixCal:
          jal isdigit
          beq $v0, 0, end_conversion
 
-            lwc1 $f14, const10
-            mul.s $f20, $f20, $f14
+            ldc1 $f14, const10
+            mul.d $f20, $f20, $f14
             addi $a0, $a0, -48
             mtc1 $a0, $f14
-            cvt.s.w $f14, $f14
-            add.s $f20, $f20, $f14
+            cvt.d.w $f14, $f14
+            add.d $f20, $f20, $f14
             addi $s0, $s0, 1
             j while_conversion
          end_conversion:
@@ -1171,7 +1029,7 @@ postfixCal:
          bne $a0, '.', end_fraction
 
          addi $s0, $s0, 1
-         lwc1 $f22, const10
+         ldc1 $f22, const10
          while_fraction:
          beq $s0, $s5, end_fraction
          la $t0, postfixExpression
@@ -1181,101 +1039,116 @@ postfixCal:
          beq $v0, 0, end_fraction
             addi $a0, $a0, -48
             mtc1 $a0, $f14
-            cvt.s.w $f14, $f14
-            div.s $f14, $f14, $f22
-            add.s $f21, $f21, $f14
-            lwc1 $f14, const10
-            mul.s $f22, $f22, $f14
+            cvt.d.w $f14, $f14
+            div.d $f14, $f14, $f22
+            add.d $f24, $f24, $f14
+            ldc1 $f14, const10
+            mul.d $f22, $f22, $f14
             addi $s0, $s0, 1
             j while_fraction
          end_fraction:
             addi $s0, $s0, -1
-            add.s $f20, $f20, $f21
-            beq $s1, 0, stack_push
-            neg.s $f20, $f20
+            add.d $f20, $f20, $f24
+            beq $s1, $0, stack_push
+            neg.d $f20, $f20
             li $s1, 0
          stack_push:
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
+         j postfixCal_increment
+      
+      else_if_M:
+      bne $s6, 'M', else_evaluate
+      beq $s1, 0, push_ans
+         li $s1, 0
+         addi $s3, $s3, 8
+         ldc1 $f14, preAns
+         neg.d $f14, $f14
+         sdc1 $f14, 0($s3)
+         j postfixCal_increment
+         push_ans:
+            addi $s3, $s3, 8
+            ldc1 $f14, preAns
+            sdc1 $f14, 0($s3)
          j postfixCal_increment
 
       else_evaluate:
          beq $s4, $s3, return1_1
 
-         lwc1 $f20, 0($s3) # val1
-         addi $s3, $s3, -4
+         ldc1 $f20, 0($s3) # val1
+         addi $s3, $s3, -8
 
          bne $s6, '!', continue_evaluate
-         lwc1 $f14, const0
-         c.lt.s $f20, $f14
+         ldc1 $f14, const0
+         c.lt.d $f20, $f14
          bc1t return1_2
 
-         lwc1 $f14, constUpperFactorial
-         c.le.s $f20, $f14 
+         ldc1 $f14, constUpperFactorial
+         c.le.d $f20, $f14 
          bc1f return1_3
 
-         cvt.w.s $f12, $f20
-         cvt.s.w $f12, $f12
-         c.eq.s $f20, $f12
+         cvt.w.d $f12, $f20
+         cvt.d.w $f12, $f12
+         c.eq.d $f20, $f12
          bc1f return1_4
 
-         cvt.w.s $f14, $f20
+         cvt.w.d $f14, $f20
          mfc1 $a0, $f14
 
-         sll $a0, $a0, 2
+         sll $a0, $a0, 3
          la $a1, fact
          add $a0, $a0, $a1
-         lwc1 $f15, 0($a0)
+         ldc1 $f16, 0($a0)
 
-         addi $s3, $s3, 4
-         swc1 $f15, 0($s3)
+         addi $s3, $s3, 8
+         sdc1 $f16, 0($s3)
          j postfixCal_increment
       
       continue_evaluate:
          beq $s3, $s4, return1_1
 
-         lwc1 $f21, 0($s3) # val2
-         addi $s3, $s3, -4
+         ldc1 $f24, 0($s3) # val2
+         addi $s3, $s3, -8
 
          bne $s6, '+', go_minus
-            add.s $f20, $f20, $f21
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            add.d $f20, $f20, $f24
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_minus:
          bne $s6, '-', go_multiply
-            sub.s $f20, $f21, $f20
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            sub.d $f20, $f24, $f20
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_multiply:
          bne $s6, '*', go_divide
-            mul.s $f20, $f20, $f21
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            mul.d $f20, $f20, $f24
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_divide:
          bne $s6, '/', go_power
-            lwc1 $f14, const0
-            c.eq.s $f20, $f14
+            ldc1 $f14, const0
+            c.eq.d $f20, $f14
             bc1t return1_5
 
-            div.s $f20, $f21, $f20
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            div.d $f20, $f24, $f20
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
             j postfixCal_increment
 
          go_power:
-            mov.s $f12, $f21
-            trunc.w.s $f14, $f20
+            mov.d $f12, $f24
+            trunc.w.d $f14, $f20
             mfc1 $a0, $f14
             jal pow
-            mov.s $f20, $f0
-            addi $s3, $s3, 4
-            swc1 $f20, 0($s3)
+            mov.d $f20, $f0
+            addi $s3, $s3, 8
+            sdc1 $f20, 0($s3)
             j postfixCal_increment
       postfixCal_increment:
          addi $s0, $s0, 1
@@ -1283,7 +1156,7 @@ postfixCal:
 
    postfixCal_loop_end:
       sub $t0, $s3, $s4
-      beq $t0, 4, return_smooth
+      beq $t0, 8, return_smooth
    return1_1:
       li $v0, 1
       j errorReturn
@@ -1307,20 +1180,13 @@ postfixCal:
       jr $ra
 
    return_smooth:
-      lwc1 $f0, 0($s3)
+      ldc1 $f0, 0($s3)
       li $v0, 0
 
       move $sp, $fp
       lw $ra, 0($sp)
       addi $sp, $sp, 4
       jr $ra
-               
-
-
-
-
-
-
 
 
 ########################################
@@ -1328,20 +1194,142 @@ postfixCal:
 
 pow:
    # f0 = f12 ^ a0
-   lwc1 $f0, const1
+   ldc1 $f0, const1
    li $t0, 0     # isNegative = false
    bgt $a0, 0, pow_loop
    li $t0, 1     # isNegative = true
    neg $a0, $a0
    pow_loop:
       beq $a0, 0, pow_check_neg
-      mul.s $f0, $f0, $f12
+      mul.d $f0, $f0, $f12
       addiu $a0, $a0, -1
       j pow_loop
    pow_check_neg:
       beq $t0, 0, pow_end
-      lwc1 $f1, const1
-      div.s $f0, $f1, $f0
+      ldc1 $f2, const1
+      div.d $f0, $f2, $f0
    pow_end:
       jr $ra
 
+isdigit:
+   # a0 = character
+   # v0 = (isdigit)? 1 : 0
+   li $v0, 1
+   li $t0, '0'
+   li $t1, '9'
+   bge $a0, $t0, isdigit_else
+   li $v0, 0
+   j isdigit_end
+   isdigit_else:
+      ble $a0, $t1, isdigit_end
+      li $v0, 0
+   isdigit_end:
+      jr $ra
+
+isDigit:
+   # a0 = character
+   # v0 = (isDigit)? 1 : 0
+   li $v0, 1
+   beq $a0, 'M', isdigit_end2
+
+   li $t0, '0'
+   li $t1, '9'
+   bge $a0, $t0, isdigit_else2
+   li $v0, 0
+   j isdigit_end
+   isdigit_else2:
+      ble $a0, $t1, isdigit_end2
+      li $v0, 0
+   isdigit_end2:
+      jr $ra
+
+
+# double_to_string:
+
+#    # ARGUMENT: f12 = double, a0 = number of decimal places
+#    # RETURN  : v0 = start address of returned string
+#    # integer part stored in a0
+#    addi $sp, $sp, -4
+#    sw $ra, 0($sp)
+
+#    ldc1 $f14, const1
+#    ldc1 $f0, const10
+
+#    # negate if negative and set isNegative
+#    li $t4, 0      # isNegative = false
+#    ldc1 $f15, const0
+#    c.lt.d $f12, $f15
+#    bc1f decimal_loop
+#       li $t4, 1
+#       neg.d $f12, $f12
+
+#    decimal_loop:
+#       beq $a0, $0, end_decimal_loop
+#       mul.d $f14, $f14, $f0
+#       addi $a0, $a0, -1
+#       j decimal_loop
+#    end_decimal_loop:
+
+#    # integer part
+#    trunc.w.d $f0, $f12
+#    mfc1 $a0, $f0
+#    jal int_to_string
+#    # save the integer part to f_to_s_result
+#    move $a0, $v0
+#    la $a1, f_to_s_result
+#    # store the unary sign 
+#    beq $t4, 0, copy_to_a1
+#       li $t0, '-'
+#       sb $t0, 0($a1)
+#       addi $a1, $a1, 1
+#    copy_to_a1:
+#    jal strcpy
+
+#    # a0 is now at '\0' so rewrite as '.'
+#    li $t0, '.'
+#    sb $t0, 0($a1)
+#    addi $a1, $a1, 1
+
+#    # fraction part multiplied by 10^decimal places
+#    trunc.w.d $f1, $f12
+#    cvt.d.w $f1, $f1
+#    sub.d $f1, $f12, $f1
+#    mul.d $f0, $f1, $f14
+#    trunc.w.d $f0, $f0
+#    mfc1 $a0, $f0
+#    jal int_to_string
+#    # save the fraction part to after the '.' of f_to_s_result
+#    move $a0, $v0  # a1 is at the start of fraction part
+#    jal strcpy
+#    sb $0, 0($a1)  # end of string
+
+#    la $v0, f_to_s_result
+#    lw $ra, 0($sp)
+#    addi $sp, $sp, 4
+#    jr $ra
+
+# int_to_string: 
+#    # this function only handles postive integers
+#    # ARGUMENT: a0 = integer
+#    # RETURN  : v0 = start address of returned string
+#    li $t0, 10
+#    move $t1, $a0
+
+#    # start of the returned string
+#    move $t2, $sp
+#    addi $sp, $sp, -1
+#    sb $0, 0($sp)
+#    addi $sp, $sp, -1
+#    int_to_string_loop:
+#       div $t1, $t0
+#       mflo $t1
+#       mfhi $t3
+#       addi $t3, $t3, '0'
+#       sb $t3, 0($sp)
+#       beq $t1, $0, end_int_to_string_loop
+#       addi $sp, $sp, -1
+#       j int_to_string_loop
+#    end_int_to_string_loop:
+#       move $v0, $sp
+#       move $sp, $t2
+#       jr $ra
