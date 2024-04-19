@@ -11,7 +11,7 @@
    star: .asciiz "*"
    
    substr_res: .space 100
-   f_to_s_result: .space 100
+   d_to_s_result: .space 100
    str1: .space 100
    str2: .space 100
 
@@ -22,24 +22,30 @@
    prompt: .asciiz "\n>> "
    quitCommand: .asciiz "quit"
    quitPrompt: .asciiz "EXIT!"
-   fact: .double 0:100
+   fact: .space 704
    constUpperFactorial: .word 70
+   constNearZero: .double 1e-8
    const0: .double 0
    const1: .double 1
    const2: .double 2
    const10: .double 10
-   constdouble: .double -6
+   constdouble: .double 200
+   const7: .double 7
    preAns: .double 0
    newline: .asciiz "\n"
+   INT_MAX: .double 2147483647
+
+   file_descriptor: .word 0
    filename: .asciiz "log.txt"
 
 
    # error messages
+   fileError: .asciiz "Error opening file!\n"
    error0: .asciiz "SYNTAX ERROR: INVALID PARENTHESES!\n"
    error1: .asciiz "SYNTAX ERROR: CONTAINING INVALID CHARACTER!\n"
    error2: .asciiz "SYNTAX ERROR NEAR '.' CHARACTER!\n"
    error3: .asciiz "SYNTAX ERROR NEAR '!' OPERATOR!\n"
-   error4: .asciiz "SYNTAX ERROR NEAR 'M' CHARACTER!\n"
+   error1_0: .asciiz "MATH ERROR: NON-INTEGER EXPONENT OF NEGATIVE NUMBER!\n"
    error1_1: .asciiz "SYNTAX ERROR: INVALID OPERATION!\n"
    error1_2: .asciiz "MATH ERROR: FACTORIAL OF NON-POSITIVE NUMBER!\n"
    error1_3: .asciiz "MATH ERROR: FACTORIAL IS TOO LARGE TO CALCULATE!\n"
@@ -47,23 +53,40 @@
    error1_5: .asciiz "MATH ERROR: DIVISION BY ZERO!\n"
 
 .text
-   # # open file
-   # li $v0, 13
-   # la $a0, filename
-   # li $a1, 9   # append flag
-   # li $a2, 0
-   # syscall
+   li $v0, 13
+   la $a0, filename
+   li $a1, 9   # flag = append
+   li $a2, 0
+   syscall
+   bge $v0, $0, save_file_des
+      # if file error
+      la $a0, fileError
+      li $v0, 4
+      syscall
+      j exit
+
+   save_file_des:
+   la $a0, file_descriptor
+   sw $v0, 0($a0)
 
 # test:
-#    ldc1 $f12, constdouble
-#    li $a0, 6
+#    li $v0, 7
+#    syscall
+
+#    mov.d $f12, $f0
+#    li $a0, 16
 #    jal double_to_string
 
 #    move $a0, $v0
 #    li $v0, 4
 #    syscall
 
-#    j exit
+#    li $v0, 11
+#    li $a0, '\n'
+#    syscall
+
+#    li $v0, 10
+#    syscall
 
 
 factorial:
@@ -77,7 +100,7 @@ factorial:
    lw $t2, 0($t2)
    sdc1 $f2, 0($t0)
    sdc1 $f2, 8($t0)
-   addi $t0, $t0, 16
+   addi $t0, $t0, 16 
    factorial_loop:
       mul.d $f0, $f0, $f4
       sdc1 $f0, 0($t0)
@@ -86,24 +109,6 @@ factorial:
       addi $t1, $t1, 1
       add.d $f4, $f4, $f2
       bne $t2, $t1, factorial_loop
-
-# test:
-#    la $a0, postfixExpression
-#    jal postfixCal
-
-#    move $a0, $v0
-#    li $v0, 1
-#    syscall
-
-#    li $v0, 11
-#    li $a0, '\n'
-#    syscall
-
-#    li $v0, 2
-#    mov.d $f12, $f0
-#    syscall
-   
-#    j exit
 
 main:
    li $v0, 4
@@ -149,9 +154,9 @@ main:
       beq $v0, 1, Error1
       beq $v0, 2, Error2
       beq $v0, 3, Error3
-      beq $v0, 4, Error4
 
       convertToPostfix:
+      ##############################
       la $a0, validatedString
       li $v0, 4
       syscall
@@ -159,10 +164,12 @@ main:
       li $v0, 11
       li $a0, '\n'
       syscall
+      ##############################
 
       la $a0, validatedString
       jal infixToPostfix
 
+      ##############################
       move $a0, $v0
       li $v0, 4
       syscall
@@ -170,58 +177,69 @@ main:
       li $v0, 11
       li $a0, '\n'
       syscall
+      ##############################
+
 
       la $a0, postfixExpression
       jal postfixCal
 
-      bne $v0, 0, checkForErrors
+      bne $v0, -1, checkForErrors
 
-      #  valid input
+      # valid input
       # print output
       la $a0, preAns
       sdc1 $f0, 0($a0)
       mov.d $f12, $f0
-      li $v0, 3
+      li $a0, 16
+      jal double_to_string
+      move $a0, $v0
+      li $v0, 4
       syscall
       
       li $a0, '\n'
       li $v0, 11
       syscall
 
-      # # store input \n preAns and save to file
-      # la $a0, input
-      # jal strLen
-      # move $a2, $v0
-      # la $a0, input
-      # li $v0, 15
-      # la $a1, buffer
-      # syscall
+      # store to "log.txt"
+      # $a0 = file descriptor $a1 = address of output buffer $a2 = number of characters to write
+      li $v0, 15
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      la $a1, prompt
+      li $a2, 4 
+      syscall
 
-      # la $a0, newline
-      # li $a2, 1
-      # li $v0, 15
-      # la $a1, buffer
-      # syscall
+      la $a0, input
+      jal strLen
+      move $a2, $v0
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      la $a1, input
+      li $v0, 15
+      syscall
 
-      # li $a0, 6
-      # # move $f12, $f0
-      # jal double_to_string
-      # move $a0, $v0
-      # la $a1, to_string_preAns
-      # jal strcpy
+      li $v0, 15
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      la $a1, newline
+      li $a2, 1
+      syscall
 
-      # la $a0, to_string_preAns
-      # jal strLen
-      # move $a2, $v0
-      # li $v0, 15
-      # la $a1, buffer
-      # syscall
+      la $a0, d_to_s_result
+      jal strLen
+      move $a2, $v0
+      la $a1, d_to_s_result
+      li $v0, 15
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      syscall
 
-      # la $a0, newline
-      # li $a2, 1
-      # li $v0, 15
-      # la $a1, buffer
-      # syscall
+      li $v0, 15
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      la $a1, newline
+      li $a2, 1
+      syscall
 
       j while
 
@@ -254,11 +272,11 @@ main:
          la $a0, error3
          syscall
          j while
-      Error4:
+      Error1_0:
          li $v0, 4
-         la $a0, error4
+         la $a0, error1_0
          syscall
-         j while   
+         j while
       Error1_1:
          li $v0, 4
          la $a0, error1_1
@@ -285,6 +303,11 @@ main:
          syscall
          j while
    exit:
+      la $a0, file_descriptor
+      lw $a0, 0($a0)
+      li $v0, 16
+      syscall 
+
       li $v0, 4
       la $a0, quitPrompt
       syscall 
@@ -453,7 +476,8 @@ erase:
    move $v0, $t5
    jr $ra
 
-strcpy:# a0 = address of string, a1 = address to save the string
+strcpy:
+   # a0 = address of string, a1 = address to save the string
    # a1 will points to the strLen
    save_loop:
       lb $t0, 0($a0)
@@ -1085,6 +1109,7 @@ postfixCal:
          bc1t return1_2
 
          la $a0, constUpperFactorial
+         lw $a0, 0($a0)
          mtc1 $a0, $f14
          cvt.d.w $f14, $f14
          c.le.d $f20, $f14 
@@ -1152,6 +1177,8 @@ postfixCal:
             j postfixCal_increment
 
          go_power:
+            # check if val2 < 0 && val1 is non-integer then return1_0
+            ### 
             mov.d $f12, $f24
             trunc.w.d $f14, $f20
             mfc1 $a0, $f14
@@ -1167,6 +1194,9 @@ postfixCal:
    postfixCal_loop_end:
       sub $t0, $s3, $s4
       beq $t0, 8, return_smooth
+   return1_0:
+      li $v0, 0
+      j errorReturn
    return1_1:
       li $v0, 1
       j errorReturn
@@ -1191,7 +1221,7 @@ postfixCal:
 
    return_smooth:
       ldc1 $f0, 0($s3)
-      li $v0, 0
+      li $v0, -1
 
       move $sp, $fp
       lw $ra, 0($sp)
@@ -1254,92 +1284,252 @@ isDigit:
       jr $ra
 
 
-# double_to_string:
+double_to_string:
 
-#    # ARGUMENT: f12 = double, a0 = number of decimal places
-#    # RETURN  : v0 = start address of returned string
-#    # integer part stored in a0
-#    addi $sp, $sp, -4
-#    sw $ra, 0($sp)
+   # ARGUMENT: f12 = double, a0 = number of decimal places
+   # RETURN  : v0 = start address of returned string
+   # integer part stored in a0
+   move $t5, $a0
+   addi $sp, $sp, -4
+   sw $ra, 0($sp)
 
-#    ldc1 $f14, const1
-#    ldc1 $f0, const10
 
-#    # negate if negative and set isNegative
-#    li $t4, 0      # isNegative = false
-#    ldc1 $f15, const0
-#    c.lt.d $f12, $f15
-#    bc1f decimal_loop
-#       li $t4, 1
-#       neg.d $f12, $f12
+   # negate if negative and set isNegative
+   li $t4, 0      # isNegative = false
+   ldc1 $f16, const0
+   c.lt.d $f12, $f16
+   bc1f check_maxInt
+      li $t4, 1
+      neg.d $f12, $f12
 
-#    decimal_loop:
-#       beq $a0, $0, end_decimal_loop
-#       mul.d $f14, $f14, $f0
-#       addi $a0, $a0, -1
-#       j decimal_loop
-#    end_decimal_loop:
+   check_maxInt:
+   mov.d $f20, $f12
+   # if f12 does not exceed INT_MAX then convert to int and print normally
+   # else convert to int and print the integer part with scientific notation
+   li $t6, 0      # isExceedInt = false
+   ldc1 $f16, INT_MAX
+   c.lt.d $f12, $f16
+   bc1t goto_integerpart
+      li $t6, 1   # isExceedInt = true
+      ldc1 $f18, const10
+      li $t7, 0    # exponent (1et7)
+      division_loop:
+         div.d $f20, $f20, $f18
+         addi $t7, $t7, 1
+         c.lt.d $f20, $f18
+         bc1t goto_integerpart
+      j division_loop
 
-#    # integer part
-#    trunc.w.d $f0, $f12
-#    mfc1 $a0, $f0
-#    jal int_to_string
-#    # save the integer part to f_to_s_result
-#    move $a0, $v0
-#    la $a1, f_to_s_result
-#    # store the unary sign 
-#    beq $t4, 0, copy_to_a1
-#       li $t0, '-'
-#       sb $t0, 0($a1)
-#       addi $a1, $a1, 1
-#    copy_to_a1:
-#    jal strcpy
+   goto_integerpart:
+   # integer part
+   cvt.w.d $f0, $f20
+   mov.s $f18, $f0
+   mfc1 $a0, $f0
+   jal int_to_string
 
-#    # a0 is now at '\0' so rewrite as '.'
-#    li $t0, '.'
-#    sb $t0, 0($a1)
-#    addi $a1, $a1, 1
+   move $a0, $v0
+   la $a1, d_to_s_result
+   # store the unary sign 
+   beq $t4, 0, copy_to_a1
+      li $t0, '-'
+      sb $t0, 0($a1)
+      addi $a1, $a1, 1
+   copy_to_a1:
+   jal strcpy
 
-#    # fraction part multiplied by 10^decimal places
-#    trunc.w.d $f1, $f12
-#    cvt.d.w $f1, $f1
-#    sub.d $f1, $f12, $f1
-#    mul.d $f0, $f1, $f14
-#    trunc.w.d $f0, $f0
-#    mfc1 $a0, $f0
-#    jal int_to_string
-#    # save the fraction part to after the '.' of f_to_s_result
-#    move $a0, $v0  # a1 is at the start of fraction part
-#    jal strcpy
-#    sb $0, 0($a1)  # end of string
+   # if the double is just integer then dont have to print the fraction part
+   cvt.w.d $f0, $f20
+   cvt.d.w $f0, $f0
+   sub.d $f0, $f20, $f0
+   ldc1 $f16, constNearZero
+   c.lt.d $f0, $f16
+   bc1t done_convert
 
-#    la $v0, f_to_s_result
-#    lw $ra, 0($sp)
-#    addi $sp, $sp, 4
-#    jr $ra
+   # else continue to check fraction part
+   # a1 is now at '\0' so store as '.'
+   li $t0, '.'
+   sb $t0, 0($a1)
+   addi $a1, $a1, 1
 
-# int_to_string: 
-#    # this function only handles postive integers
-#    # ARGUMENT: a0 = integer
-#    # RETURN  : v0 = start address of returned string
-#    li $t0, 10
-#    move $t1, $a0
+   ldc1 $f0, const10
+   # fraction part multipliedf by 10^decimal places
+   cvt.w.d $f2, $f20
+   cvt.d.w $f2, $f2
+   sub.d $f2, $f20, $f2
 
-#    # start of the returned string
-#    move $t2, $sp
-#    addi $sp, $sp, -1
-#    sb $0, 0($sp)
-#    addi $sp, $sp, -1
-#    int_to_string_loop:
-#       div $t1, $t0
-#       mflo $t1
-#       mfhi $t3
-#       addi $t3, $t3, '0'
-#       sb $t3, 0($sp)
-#       beq $t1, $0, end_int_to_string_loop
-#       addi $sp, $sp, -1
-#       j int_to_string_loop
-#    end_int_to_string_loop:
-#       move $v0, $sp
-#       move $sp, $t2
-#       jr $ra
+   li $t2, 0     # if t2 == 1 && $f2 < 1 then stop
+   # f2 is 0.xxxxx so multiply by 10 and get the integer part
+   decimal_loop:
+      beq $t5, $0, end_decimal_loop
+      # str[a1] = int(f2*10)
+      mul.d $f2, $f2, $f0
+
+      cvt.w.d $f14, $f2
+      mfc1 $t0, $f14
+      addi $t0, $t0, '0'
+      sb $t0, 0($a1)
+
+      cvt.d.w $f14, $f14
+      sub.d $f2, $f2, $f14
+      addi $a1, $a1, 1
+      addi $t5, $t5, -1
+      j decimal_loop
+   end_decimal_loop:
+   sb $0, 0($a1)  # end of string
+
+   done_convert:
+   beq $t6, 0, just_round
+      # add E^t7
+      li $t0, 'E'
+      sb $t0, 0($a1)
+      addi $a1, $a1, 1
+      move $a0, $t7
+      jal int_to_string
+      move $a0, $v0
+      jal strcpy
+      j return_done
+
+   just_round:
+      ### test
+      la $a0, d_to_s_result
+      li $v0, 4
+      syscall
+
+      li $a0, '\n'
+      li $v0, 11
+      syscall
+      ### test
+
+      la $a0, d_to_s_result
+      jal rounding
+   
+   return_done:
+   la $v0, d_to_s_result
+   lw $ra, 0($sp)
+   addi $sp, $sp, 4
+   jr $ra
+
+
+int_to_string: 
+   # this function only handles postive integers
+   # ARGUMENT: a0 = integer
+   # RETURN  : v0 = start address of returned string
+   li $t0, 10
+   move $t1, $a0
+
+   # start of the returned string
+   move $t2, $sp
+   addi $sp, $sp, -1
+   sb $0, 0($sp)
+   addi $sp, $sp, -1
+   int_to_string_loop:
+      div $t1, $t0
+      mflo $t1
+      mfhi $t3
+      addi $t3, $t3, '0'
+      sb $t3, 0($sp)
+      beq $t1, $0, end_int_to_string_loop
+      addi $sp, $sp, -1
+      j int_to_string_loop
+   end_int_to_string_loop:
+      move $v0, $sp
+      move $sp, $t2
+      jr $ra
+
+
+isInteger:
+   # f12 = double, v0 = (f12 isInteger)? 1 : 0
+   # this function only works for number in integer range
+   li $v0, 1
+
+      li $v0, 0
+
+   isInteger_end:
+      jr $ra
+
+
+rounding:
+   # a0 = address of double_to_string result
+   goto_fraction:
+      lb $t0, 0($a0)
+      beq $t0, '.', fraction_end
+      addi $a0, $a0, 1
+      j goto_fraction
+   fraction_end:
+   addi $a0, $a0, 1
+
+   # t0 = str[i]
+   # t1 counts number of 0s or 9s. if t1 == 4 then break and incre/decre str[t3]
+   # t2 holds the current value (0 or 9)
+   # t3 holds the address before encountering 0s or 9s
+
+   # if (t1 == 0) {
+   #    if (t0 == '0' || t0 == '9') {
+   #       t1++;
+   #       t2 = t0;
+   #       t3 = a0 - 1;
+   #    }
+   # }
+   # else {
+   #    if (t0 == t2) {
+   #       t1++;
+   #       if (t1 == 6) j end_rounding
+   #    }
+   #    else if (t0 == '0' || t0 == '9') {
+   #       t1 = 0...
+   #    }
+   #    else { 
+   #     t3 = a0 - 1;
+   #     t1 = 0;
+   #    }
+   # }
+
+   li $t1, 0
+   rounding_loop:
+      addi $a0, $a0, 1
+      lb $t0, 0($a0)
+      beq $t0, $0, end_rounding_loop
+      
+      bne $t1, $0, t1_not_0
+      beq $t0, '0', check_t0
+      beq $t0, '9', check_t0
+      j rounding_loop
+      check_t0:
+         addi $t1, $t1, 1
+         move $t2, $t0
+         subi $t3, $a0, 1
+         j rounding_loop
+
+      t1_not_0:   
+         bne $t0, $t2, t0_not_t2
+            addi $t1, $t1, 1
+            beq $t1, 6, end_rounding_loop
+         j rounding_loop
+         t0_not_t2:
+         beq $t0, '0', check_t0_1
+         beq $t0, '9', check_t0_1
+         j t0_not_t2_2
+         check_t0_1:
+            li $t1, 0
+            j check_t0
+         t0_not_t2_2:
+            move $t3, $a0
+            addi $t3, $t3, -1
+            li $t1, 0
+      j rounding_loop
+
+   end_rounding_loop:
+   # if t1 == 6 then incre/decre str[t3]
+   bne $t1, 6, return_rounding
+      bne $t2, '0', t2_is_9
+         sb $0, 1($t3)
+         j return_rounding
+
+      t2_is_9:
+         lb $t0, 0($t3)
+         addi $t0, $t0, 1
+         sb $t0, 0($t3)
+         sb $0, 1($t3)
+   
+   return_rounding:
+      jr $ra
