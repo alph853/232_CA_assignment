@@ -22,21 +22,20 @@
    prompt: .asciiz "\n>> "
    quitCommand: .asciiz "quit"
    quitPrompt: .asciiz "EXIT!"
-   fact: .space 704
-   constUpperFactorial: .word 70
+   fact: .space 1368
+   constUpperFactorial: .word 170
    constNearZero: .double 1e-8
-   const0: .double 0
    const1: .double 1
    const2: .double 2
    const10: .double 10
    constdouble: .double 200
-   const7: .double 7
    preAns: .double 0
    newline: .asciiz "\n"
    INT_MAX: .double 2147483647
 
    file_descriptor: .word 0
    filename: .asciiz "log.txt"
+   const0: .double 0
 
 
    # error messages
@@ -69,35 +68,18 @@
    la $a0, file_descriptor
    sw $v0, 0($a0)
 
-# test:
-#    li $v0, 7
-#    syscall
-
-#    mov.d $f12, $f0
-#    li $a0, 16
-#    jal double_to_string
-
-#    move $a0, $v0
-#    li $v0, 4
-#    syscall
-
-#    li $v0, 11
-#    li $a0, '\n'
-#    syscall
-
-#    li $v0, 10
-#    syscall
-
 
 factorial:
-   ldc1 $f0, const1  # fact[index-1]
-   ldc1 $f2, const1
-   ldc1 $f4, const2  # index
+   l.d $f0, const1  # fact[index-1]
+   l.d $f2, const1  
+   l.d $f4, const2  # index
 
    la $t0, fact
    li $t1, 2
    la $t2, constUpperFactorial
    lw $t2, 0($t2)
+   addi $t2, $t2, 1
+
    sdc1 $f2, 0($t0)
    sdc1 $f2, 8($t0)
    addi $t0, $t0, 16 
@@ -130,8 +112,6 @@ main:
       # get length and remove newline
       la $a0, input
       jal strLen   
-      la $t0, stringLength
-      sw $v0, 0($t0)
 
       # if input empty then continue loop
       la $a0, input
@@ -187,6 +167,14 @@ main:
 
       # valid input
       # print output
+      li $v0, 3
+      mov.d $f12, $f0
+      syscall
+
+      li $a0, '\n'
+      li $v0, 11
+      syscall
+
       la $a0, preAns
       sdc1 $f0, 0($a0)
       mov.d $f12, $f0
@@ -490,24 +478,24 @@ strcpy:
       jr $ra
 
 
-strAppend:
-   # a0 = string, a1 = string to append to string a0
-   # v0 = start address of returned string
-   addi $sp, $sp, -4
-   sw $ra, 0($sp)
+# strAppend:
+#    # a0 = string, a1 = string to append to string a0
+#    # v0 = start address of returned string
+#    addi $sp, $sp, -4
+#    sw $ra, 0($sp)
 
-   jal strLen
-   # a0 = address of '\0' now
-   move $t0, $a1
-   move $a1, $a0
-   move $a0, $t0
+#    jal strLen
+#    # a0 = address of '\0' now
+#    move $t0, $a1
+#    move $a1, $a0
+#    move $a0, $t0
 
-   jal strcpy
+#    jal strcpy
 
-   move $v0, $t0
-   lw $ra, 0($sp)
-   addi $sp, $sp, 4
-   jr $ra
+#    move $v0, $t0
+#    lw $ra, 0($sp)
+#    addi $sp, $sp, 4
+#    jr $ra
 
 ########################################
 ########################################
@@ -789,21 +777,7 @@ validateString:
          j validatedString_loop
 
    validatedString_loop_end:
-      la $a0, validatedString
-      lb $t0, 1($a0)
-      bne $t0, '-', check_balance
-         lb $t1, 0($a0)
-         bne $t1, '+', if_elseif_minus
-            li $a1, 0
-            li $a2, 1
-            jal erase 
-            j check_balance
-         if_elseif_minus:
-            li $a1, 0
-            li $a2, 2
-            jal erase
 
-      check_balance:
       beq $s4, $0, return
       j return0
 
@@ -1028,8 +1002,8 @@ postfixCal:
       jal isdigit
       bne $v0, 1, else_if_M
       # if (isdigit(postfix[i])) 
-         ldc1 $f20, const0    # val = 0.0
-         ldc1 $f24, const0    # fraction = 0.0
+         l.d $f20, const0
+         l.d $f24, const0
          while_conversion:
          beq $s0, $s5, end_conversion
          la $t0, postfixExpression
@@ -1038,7 +1012,7 @@ postfixCal:
          jal isdigit
          beq $v0, 0, end_conversion
 
-            ldc1 $f14, const10
+            l.d $f14, const10
             mul.d $f20, $f20, $f14
             addi $a0, $a0, -48
             mtc1 $a0, $f14
@@ -1054,7 +1028,7 @@ postfixCal:
          bne $a0, '.', end_fraction
 
          addi $s0, $s0, 1
-         ldc1 $f22, const10
+         l.d $f22, const10
          while_fraction:
          beq $s0, $s5, end_fraction
          la $t0, postfixExpression
@@ -1067,7 +1041,7 @@ postfixCal:
             cvt.d.w $f14, $f14
             div.d $f14, $f14, $f22
             add.d $f24, $f24, $f14
-            ldc1 $f14, const10
+            l.d $f14, const10
             mul.d $f22, $f22, $f14
             addi $s0, $s0, 1
             j while_fraction
@@ -1087,13 +1061,13 @@ postfixCal:
       beq $s1, 0, push_ans
          li $s1, 0
          addi $s3, $s3, 8
-         ldc1 $f14, preAns
+         l.d $f14, preAns
          neg.d $f14, $f14
          sdc1 $f14, 0($s3)
          j postfixCal_increment
          push_ans:
             addi $s3, $s3, 8
-            ldc1 $f14, preAns
+            l.d $f14, preAns
             sdc1 $f14, 0($s3)
          j postfixCal_increment
 
@@ -1104,7 +1078,7 @@ postfixCal:
          addi $s3, $s3, -8
 
          bne $s6, '!', check_unary_
-         ldc1 $f14, const0
+         l.d $f14, const0
          c.lt.d $f20, $f14
          bc1t return1_2
 
@@ -1167,7 +1141,7 @@ postfixCal:
 
          go_divide:
          bne $s6, '/', go_power
-            ldc1 $f14, const0
+            l.d $f14, const0
             c.eq.d $f20, $f14
             bc1t return1_5
 
@@ -1234,7 +1208,7 @@ postfixCal:
 
 pow:
    # f0 = f12 ^ a0
-   ldc1 $f0, const1
+   l.d $f0, const1
    li $t0, 0     # isNegative = false
    bgt $a0, 0, pow_loop
    li $t0, 1     # isNegative = true
@@ -1246,7 +1220,7 @@ pow:
       j pow_loop
    pow_check_neg:
       beq $t0, 0, pow_end
-      ldc1 $f2, const1
+      l.d $f2, const1
       div.d $f0, $f2, $f0
    pow_end:
       jr $ra
@@ -1296,7 +1270,7 @@ double_to_string:
 
    # negate if negative and set isNegative
    li $t4, 0      # isNegative = false
-   ldc1 $f16, const0
+   l.d $f16, const0
    c.lt.d $f12, $f16
    bc1f check_maxInt
       li $t4, 1
@@ -1307,11 +1281,11 @@ double_to_string:
    # if f12 does not exceed INT_MAX then convert to int and print normally
    # else convert to int and print the integer part with scientific notation
    li $t6, 0      # isExceedInt = false
-   ldc1 $f16, INT_MAX
+   l.d $f16, INT_MAX
    c.lt.d $f12, $f16
    bc1t goto_integerpart
       li $t6, 1   # isExceedInt = true
-      ldc1 $f18, const10
+      l.d $f18, const10
       li $t7, 0    # exponent (1et7)
       division_loop:
          div.d $f20, $f20, $f18
@@ -1341,7 +1315,7 @@ double_to_string:
    cvt.w.d $f0, $f20
    cvt.d.w $f0, $f0
    sub.d $f0, $f20, $f0
-   ldc1 $f16, constNearZero
+   l.d $f16, constNearZero
    c.lt.d $f0, $f16
    bc1t done_convert
 
@@ -1351,8 +1325,8 @@ double_to_string:
    sb $t0, 0($a1)
    addi $a1, $a1, 1
 
-   ldc1 $f0, const10
-   # fraction part multipliedf by 10^decimal places
+   l.d $f0, const10
+   # fraction part multiplied by 10^decimal places
    cvt.w.d $f2, $f20
    cvt.d.w $f2, $f2
    sub.d $f2, $f20, $f2
@@ -1391,13 +1365,13 @@ double_to_string:
 
    just_round:
       ### test
-      la $a0, d_to_s_result
-      li $v0, 4
-      syscall
+      # la $a0, d_to_s_result
+      # li $v0, 4
+      # syscall
 
-      li $a0, '\n'
-      li $v0, 11
-      syscall
+      # li $a0, '\n'
+      # li $v0, 11
+      # syscall
       ### test
 
       la $a0, d_to_s_result
@@ -1438,7 +1412,7 @@ int_to_string:
 
 
 isInteger:
-   # f12 = double, v0 = (f12 isInteger)? 1 : 0
+   # f12 = double, v0 = (f12 isInteger)? 1 : 0  
    # this function only works for number in integer range
    li $v0, 1
 
